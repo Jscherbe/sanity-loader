@@ -1,0 +1,31 @@
+{
+  "name": "@ulu/sanity-loader",
+  "version": "1.0.0",
+  "description": "A generic loader for Sanity content. It handles data fetching, caching, and asset management.",
+  "main": "lib/index.js",
+  "type": "module",
+  "scripts": {},
+  "keywords": [
+    "sanity",
+    "loader",
+    "data",
+    "cache",
+    "assets"
+  ],
+  "author": "Joe Scherben",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Jscherbe/sanity-loader.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Jscherbe/sanity-loader/issues"
+  },
+  "homepage": "https://github.com/Jscherbe/sanity-loader#readme",
+  "dependencies": {
+    "@sanity/client": "^6.21.0",
+    "@sanity/image-url": "^1.0.2",
+    "@ulu/utils": "^1.0.0",
+    "fs-extra": "^11.2.0"
+  }
+}

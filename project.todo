@@ -1,0 +1,7 @@
+Todos:
+  ☐ Make sure to make the cache auto mechanism a callback option (passed client)
+    * That way if it needs to be specific it can be
+    * Not sure if expected version could maybe refactored to be a function (so it's open ended, and could be used like the old expectedVersion constants)
+  ☐ Setup test sanity database
+    * Sanity database setup "ulu-sanity-loader-demo" need to create data/schema and test the library
+  
