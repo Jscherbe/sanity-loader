@@ -1,29 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import dotenv from 'dotenv';
-import path from 'path';
-import { createClient } from '@sanity/client';
+import { createSanityClient } from "./utils.js";
 import { createSanityLoader } from '../lib/index.js';
 
-// Load environment variables from .env file
-dotenv.config({ path: path.resolve(process.cwd(), '.env') });
-
-const sanityConfig = {
-  projectId: process.env.SANITY_PROJECT_ID,
-  dataset: process.env.SANITY_DATASET,
-  token: process.env.SANITY_API_TOKEN,
-  useCdn: false, // Use false for testing to ensure fresh data
-  apiVersion: '2023-05-03' // Use a specific API version
-};
-
-// Basic validation to ensure credentials are in the .env file
-if (!sanityConfig.projectId || !sanityConfig.dataset || !sanityConfig.token) {
-  throw new Error(
-    'Sanity projectId, dataset, and token must be defined in your .env file. Please replace the placeholder values.'
-  );
-}
-
 // Create the Sanity client instance outside of the loader
-const sanityClient = createClient(sanityConfig);
+const sanityClient = createSanityClient();
 
 describe('Sanity Loader: Basic Fetching', () => {
 

@@ -1,18 +1,8 @@
 import { describe, it, expect, beforeAll, afterEach } from 'vitest';
 import path from 'path';
 import fs from 'fs/promises';
-import { createClient } from '@sanity/client';
 import { createSanityLoader } from '../lib/index.js';
-import 'dotenv/config';
-
-// --- Configuration ---
-const sanityConfig = {
-  projectId: process.env.SANITY_PROJECT_ID,
-  dataset: process.env.SANITY_DATASET,
-  token: process.env.SANITY_API_TOKEN,
-  useCdn: false,
-  apiVersion: '2023-05-03',
-};
+import { createSanityClient } from "./utils.js";
 
 const paths = {
   cache: './tests/.cache',
@@ -33,7 +23,7 @@ beforeAll(() => {
   if (!sanityConfig.projectId || !sanityConfig.dataset || !sanityConfig.token) {
     throw new Error('Sanity credentials must be defined in your .env file.');
   }
-  const sanityClient = createClient(sanityConfig);
+  const sanityClient = createSanityClient();
   sanityLoader = createSanityLoader({
     client: sanityClient,
     paths: paths,
