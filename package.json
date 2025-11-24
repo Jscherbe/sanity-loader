@@ -4,7 +4,9 @@
   "description": "A generic loader for Sanity content. It handles data fetching, caching, and asset management.",
   "main": "lib/index.js",
   "type": "module",
-  "scripts": {},
+  "scripts": {
+    "test": "vitest"
+  },
   "keywords": [
     "sanity",
     "loader",
@@ -25,7 +27,11 @@
   "dependencies": {
     "@sanity/client": "^6.21.0",
     "@sanity/image-url": "^1.0.2",
-    "@ulu/utils": "^1.0.0",
+    "@ulu/utils": "^0.0.33",
     "fs-extra": "^11.2.0"
+  },
+  "devDependencies": {
+    "dotenv": "^17.2.3",
+    "vitest": "^4.0.13"
   }
 }
