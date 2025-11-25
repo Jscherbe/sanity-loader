@@ -19,7 +19,9 @@
   "type": "module",
   "scripts": {
     "test": "vitest",
-    "types": "npx tsc"
+    "types": "npx tsc",
+    "docs": "node_modules/.bin/jsdoc -c jsdoc.json",
+    "lint": "eslint ."
   },
   "keywords": [
     "assets",
@@ -48,6 +50,11 @@
   },
   "devDependencies": {
     "dotenv": "^17.2.3",
-    "vitest": "^4.0.13"
+    "vitest": "^4.0.13",
+    "docdash": "^2.0.2",
+    "eslint": "^9.7.0",
+    "@eslint/js": "^9.7.0",
+    "globals": "^15.8.0",
+    "jsdoc": "^4.0.2"
   }
 }
