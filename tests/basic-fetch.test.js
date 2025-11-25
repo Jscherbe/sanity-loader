@@ -13,10 +13,10 @@ describe('Sanity Loader: Basic Fetching', () => {
       client: sanityClient,
       paths: {
         // Provide dummy paths for correct initialization, even if not all are used in this test
-        cache: './.cache',
-        queries: './queries',
-        assetsFs: './assets',
-        assetsPublic: '/assets'
+        cache: './tests/.cache',
+        queries: './tests/queries',
+        assets: './tests/assets',
+        assetsPublic: '/assets',
       }
     });
 

@@ -7,7 +7,7 @@ import { createSanityClient } from "./utils.js";
 const paths = {
   cache: './tests/.cache',
   queries: './tests/queries',
-  assetsFs: './tests/assets',
+  assets: './tests/assets',
   assetsPublic: '/assets',
 };
 
@@ -20,9 +20,6 @@ let sanityLoader;
 
 // --- Setup ---
 beforeAll(() => {
-  if (!sanityConfig.projectId || !sanityConfig.dataset || !sanityConfig.token) {
-    throw new Error('Sanity credentials must be defined in your .env file.');
-  }
   const sanityClient = createSanityClient();
   sanityLoader = createSanityLoader({
     client: sanityClient,
@@ -82,31 +79,66 @@ describe('Sanity Loader Core Mechanics', () => {
   });
 
 
-  it('should re-run freshness check when timestamp is missing', async () => {
+  it('should invalidate cache and re-fetch when content is stale', async () => {
     const fetchPosts = sanityLoader.defineLoader({
       queryName: queryName,
       cacheEnabled: true,
     });
     
-    // Run 1: Establish cache and timestamp
+    // Run 1: Establish cache, get its modification time.
     await fetchPosts();
-    const timestampStat1 = await fs.stat(timestampFile).catch(() => null);
-    expect(timestampStat1).not.toBeNull();
+    const cacheStats1 = await fs.stat(cacheFile);
 
-    // Delete the timestamp to simulate a stale state
-    await fs.rm(timestampFile);
+    // Manually write an old timestamp to simulate a stale cache
+    await fs.writeFile(timestampFile, '2024-01-01T00:00:00.000Z');
     
-    // Wait a moment to ensure clock ticks
+    // Wait a moment to ensure file modification times would be different if written
     await new Promise(resolve => setTimeout(resolve, 50));
 
-    // Run 2: Should re-run the check and re-create the file
+    // Run 2: This should detect the stale timestamp and re-fetch.
     await fetchPosts();
-    const timestampStat2 = await fs.stat(timestampFile).catch(() => null);
+    const cacheStats2 = await fs.stat(cacheFile);
 
-    // Behavior check: Was the timestamp file re-created?
-    expect(timestampStat2).not.toBeNull();
-    // Its creation time should be later than the first one.
-    expect(timestampStat2.birthtimeMs).toBeGreaterThan(timestampStat1.birthtimeMs);
+    // Behavior check: Was the cache file re-written? It should have been.
+    expect(cacheStats2.mtimeMs).toBeGreaterThan(cacheStats1.mtimeMs);
+  });
+
+
+  it('should use custom invalidation function when provided', async () => {
+    // This function will say the cache is fresh the first time, and stale the second time.
+    const createStaleOnSecondCall = () => {
+      let callCount = 0;
+      return async (client, context) => {
+        callCount++;
+        return callCount > 1;
+      };
+    };
+
+    const customIsCacheStale = createStaleOnSecondCall();
+    const sanityClient = createSanityClient();
+    const customLoader = createSanityLoader({
+      client: sanityClient,
+      paths: paths,
+      isCacheStale: customIsCacheStale, // Use the custom function
+    });
+    
+    const fetchPosts = customLoader.defineLoader({
+      queryName: queryName,
+      cacheEnabled: true,
+    });
+    
+    // Run 1: Establish cache. Custom `isStale` returns false.
+    await fetchPosts();
+    const cacheStats1 = await fs.stat(cacheFile);
+
+    await new Promise(resolve => setTimeout(resolve, 50));
+
+    // Run 2: Custom `isStale` returns true. Should re-fetch.
+    await fetchPosts();
+    const cacheStats2 = await fs.stat(cacheFile);
+
+    // Behavior check: Was the cache file re-written? It should have been.
+    expect(cacheStats2.mtimeMs).toBeGreaterThan(cacheStats1.mtimeMs);
   });
 
 });

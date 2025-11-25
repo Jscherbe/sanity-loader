@@ -3,16 +3,26 @@
   "version": "1.0.0",
   "description": "A generic loader for Sanity content. It handles data fetching, caching, and asset management.",
   "main": "lib/index.js",
+  "files": [
+    "lib",
+    "LICENSE",
+    "README.md"
+  ],
+  "exports": {
+    ".": "./lib/index.js"
+  },
   "type": "module",
   "scripts": {
     "test": "vitest"
   },
   "keywords": [
-    "sanity",
-    "loader",
-    "data",
+    "assets",
     "cache",
-    "assets"
+    "data",
+    "groq",
+    "loader",
+    "portable-text",
+    "sanity"
   ],
   "author": "Joe Scherben",
   "license": "MIT",
