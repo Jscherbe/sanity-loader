@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterEach } from 'vitest';
+import { describe, it, expect, beforeAll, afterEach, vi } from 'vitest';
 import path from 'path';
 import fs from 'fs/promises';
 import { createSanityLoader } from '../lib/index.js';
@@ -58,7 +58,14 @@ describe('Sanity Loader Core Mechanics', () => {
 
 
   it('should serve data from cache on the second run', async () => {
-    const fetchPosts = sanityLoader.defineLoader({
+    const sanityClient = createSanityClient();
+    const nonStaleLoader = createSanityLoader({
+      client: sanityClient,
+      paths: paths,
+      isCacheStale: () => false, // Critically, we tell it the cache is always fresh.
+    });
+
+    const fetchPosts = nonStaleLoader.defineLoader({
       queryName: queryName,
       cacheEnabled: true,
     });
@@ -120,6 +127,7 @@ describe('Sanity Loader Core Mechanics', () => {
       client: sanityClient,
       paths: paths,
       isCacheStale: customIsCacheStale, // Use the custom function
+      invalidateCachePerCall: true, // This test requires per-call behavior
     });
     
     const fetchPosts = customLoader.defineLoader({
@@ -139,6 +147,50 @@ describe('Sanity Loader Core Mechanics', () => {
 
     // Behavior check: Was the cache file re-written? It should have been.
     expect(cacheStats2.mtimeMs).toBeGreaterThan(cacheStats1.mtimeMs);
+  });
+
+});
+
+describe('Cache Invalidation Strategy', () => {
+
+  it('should check for stale cache only ONCE by default (on-start)', async () => {
+    const mockIsCacheStale = vi.fn().mockResolvedValue(false);
+    
+    const sanityClient = createSanityClient();
+    const onStartLoader = createSanityLoader({
+      client: sanityClient,
+      paths: paths,
+      isCacheStale: mockIsCacheStale,
+      // invalidateCachePerCall is false by default
+    });
+    
+    const fetchPosts = onStartLoader.defineLoader({ queryName: "posts" });
+    const fetchPostsAgain = onStartLoader.defineLoader({ queryName: "posts" });
+
+    await fetchPosts();
+    await fetchPostsAgain();
+
+    expect(mockIsCacheStale).toHaveBeenCalledTimes(1);
+  });
+
+  it('should check for stale cache on EACH call when invalidateCachePerCall is true', async () => {
+    const mockIsCacheStale = vi.fn().mockResolvedValue(false);
+    
+    const sanityClient = createSanityClient();
+    const perCallLoader = createSanityLoader({
+      client: sanityClient,
+      paths: paths,
+      isCacheStale: mockIsCacheStale,
+      invalidateCachePerCall: true, // Explicitly enable per-call checking
+    });
+    
+    const fetchPosts = perCallLoader.defineLoader({ queryName: "posts" });
+    const fetchPostsAgain = perCallLoader.defineLoader({ queryName: "posts" });
+
+    await fetchPosts();
+    await fetchPostsAgain();
+
+    expect(mockIsCacheStale).toHaveBeenCalledTimes(2);
   });
 
 });

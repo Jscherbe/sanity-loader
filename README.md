@@ -118,7 +118,8 @@ The `createSanityLoader` function accepts a single configuration object:
 | `paths.cache`   | `string`   | Path to the directory where cached Sanity data will be stored.                                                                                                                                                                                                       |
 | `paths.assets`| `string`   | Path on the filesystem where downloaded assets should be saved.                                                                                                                                                                                                      |
 | `paths.assetsPublic`| `string`   | The public URL path from which the saved assets will be served.                                                                                                                                                                                                      |
-| `isCacheStale`| `function` | Optional `async` function to override the default cache invalidation logic. See [Advanced Cache Invalidation](#advanced-cache-invalidation) for details. Defaults to a timestamp-based check of the most recently updated Sanity document.                               |
+| `invalidateCachePerCall` | `boolean` | Determines the cache invalidation strategy. If `false` (default), the cache staleness is checked only once on the first loader call. If `true`, it's checked on every call. See [Advanced Cache Invalidation](#advanced-cache-invalidation). |
+| `isCacheStale`| `function` | Optional `async` function to override the default cache invalidation logic. Defaults to a timestamp-based check. Its execution is controlled by `invalidateCachePerCall`. See [Advanced Cache Invalidation](#advanced-cache-invalidation) for details. |
 | `verbose`     | `boolean`  | Set to `true` to enable detailed logging. Defaults to `false`.                                                                                                                                                                                                       |
 
 ## Creating Loaders (`defineLoader`)
@@ -135,33 +136,45 @@ The `defineLoader` function creates a reusable, executable loader for a specific
 
 ## Advanced Cache Invalidation
 
-By default, the loader checks for content updates by comparing the `_updatedAt` timestamp of the most recently changed document in your Sanity dataset with a timestamp stored locally in your cache directory (`latest-update.txt`).
+The loader offers two main strategies for checking if the cache is stale, controlled by the `invalidateCachePerCall` option.
 
-You can override this behavior by providing a custom `isCacheStale` function to `createSanityLoader`. This gives you full control over when the cache is considered "stale."
+### Invalidation Strategies
+
+*   **`invalidateCachePerCall: false` (Default "on-start" strategy)**  
+    With this setting, the loader checks for stale content **only once** when the first loader is executed. The result (whether the cache is stale or not) is then reused for all subsequent loader calls. This is the most efficient strategy for build processes where data is expected to be consistent throughout the entire run.
+
+*   **`invalidateCachePerCall: true` ("per-call" strategy)**  
+    This setting makes the loader check for stale content on **every single** loader execution. This guarantees the freshest possible data on every call but can be slower if you have many loaders, as each one may trigger a network request to check for updates.
+
+By default, the check itself involves comparing the `_updatedAt` timestamp of the most recently changed document in your Sanity dataset with a timestamp stored locally in your cache directory (`latest-update.txt`).
+
+### Custom Invalidation Logic
+
+You can override the default checking logic entirely by providing a custom `async` function to the `isCacheStale` option. This gives you full control over *how* the cache is determined to be stale.
 
 The function signature is `async (client, context)`, where:
 - `client`: The configured Sanity client instance, which you can use to make custom queries.
 - `context`: An object containing `{ cacheDir }`, the absolute path to the cache directory.
 
-The function must return a `Promise` that resolves to a `boolean`: `true` if the cache is stale (and should be re-fetched), `false` otherwise.
+The function must return a `Promise` that resolves to a `boolean`: `true` if the cache is stale, `false` otherwise.
 
-### Example 1: Stateless Invalidation (Environment-based)
+**Note:** The execution frequency of your custom `isCacheStale` function is still controlled by `invalidateCachePerCall`.
 
-A common use case is to always fetch fresh data in development but use the cache in production.
+#### Example: Environment-based Invalidation
+
+A common use case is to always fetch fresh data in development but use the efficient default in production. To achieve this, you would use the "per-call" strategy in development.
 
 ```javascript
 const sanityLoader = createSanityLoader({
   //...
-  isCacheStale: async (client, context) => {
-    // In development, always consider the cache stale.
-    return process.env.NODE_ENV === 'development';
-  }
+  // In dev, check every time. In prod, check only once at the start.
+  invalidateCachePerCall: process.env.NODE_ENV === 'development',
 });
 ```
 
-### Example 2: Stateful Invalidation (Custom Query)
+#### Example: Custom Query Logic
 
-If you want to manage your own state, you can use the `cacheDir` from the context to read/write your own metadata files. For example, you could check for updates only on `post` documents.
+If you want to base the invalidation on a specific document type, you can provide a custom `isCacheStale` function.
 
 ```javascript
 import fs from 'fs-extra';
@@ -184,7 +197,8 @@ const postOnlyInvalidation = async (client, { cacheDir }) => {
 
 const sanityLoader = createSanityLoader({
   //...
-  isCacheStale: postOnlyInvalidation
+  isCacheStale: postOnlyInvalidation,
+  // This custom function will run based on invalidateCachePerCall (defaults to once)
 });
 ```
 
