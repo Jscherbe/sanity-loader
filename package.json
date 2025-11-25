@@ -3,17 +3,23 @@
   "version": "1.0.0",
   "description": "A generic loader for Sanity content. It handles data fetching, caching, and asset management.",
   "main": "lib/index.js",
+  "types": "types/index.d.ts",
   "files": [
     "lib",
+    "types",
     "LICENSE",
     "README.md"
   ],
   "exports": {
-    ".": "./lib/index.js"
+    ".": {
+      "import": "./lib/index.js",
+      "types": "./types/index.d.ts"
+    }
   },
   "type": "module",
   "scripts": {
-    "test": "vitest"
+    "test": "vitest",
+    "types": "npx tsc"
   },
   "keywords": [
     "assets",
