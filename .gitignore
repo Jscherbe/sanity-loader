@@ -6,3 +6,6 @@
 
 # macOS
 .DS_Store
+
+# Dotenv and similar local-only files
+*.local
