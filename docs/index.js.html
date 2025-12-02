@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    
+    <meta charset="utf-8">
+    <title>index.js - Documentation</title>
+    
+    
+    <script src="scripts/prettify/prettify.js"></script>
+    <script src="scripts/prettify/lang-css.js"></script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc.css">
+    <script src="scripts/nav.js" defer></script>
+    
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body>
+
+<input type="checkbox" id="nav-trigger" class="nav-trigger" />
+<label for="nav-trigger" class="navicon-button x">
+  <div class="navicon"></div>
+</label>
+
+<label for="nav-trigger" class="overlay"></label>
+
+<nav >
+    
+    
+    <h2><a href="index.html">Home</a></h2><h3>Modules</h3><ul><li><a href="module-@ulu_sanity-loader.html">@ulu/sanity-loader</a><ul class='methods'><li data-type='method'><a href="module-@ulu_sanity-loader.html#.createSanityLoader">createSanityLoader</a></li></ul></li><li><a href="module-@ulu_sanity-loader_defaults.html">@ulu/sanity-loader/defaults</a><ul class='methods'><li data-type='method'><a href="module-@ulu_sanity-loader_defaults.html#~isCacheStale">isCacheStale</a></li></ul></li></ul><h3>Global</h3><ul><li><a href="global.html#fixPortableText">fixPortableText</a></li></ul>
+    
+</nav>
+
+<div id="main">
+    
+    <h1 class="page-title">index.js</h1>
+    
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>/**
+ * @module @ulu/sanity-loader
+ * @version 1.0.0
+ * @description
+ * A generic loader for Sanity content. It handles data fetching, caching, and asset management.
+ */
+
+import fs from "fs-extra";
+import https from "https";
+import path from "path";
+import { createClient } from "@sanity/client";
+import createImageUrl from "@sanity/image-url";
+import { fixPortableText } from "./utils.js";
+import { loaderDefaults, defaultSanityLoaderOptions } from "./defaults.js";
+import { log } from "./logger.js";
+
+/**
+ * @typedef {import('@sanity/client').SanityClient} SanityClient
+ * @typedef {import('@sanity/image-url/lib/types/builder').ImageUrlBuilder} ImageUrlBuilder
+ */
+
+/**
+ * @typedef {object} SanityLoader
+ * @property {SanityClient} client - The configured Sanity client instance.
+ * @property {(options: object) => () => Promise&lt;any>} defineLoader - Defines a data loader for a specific query.
+ * @property {(source: object) => ImageUrlBuilder} imageUrl - The Sanity image URL builder instance.
+ * @property {{ fixPortableText: (...fields: Array&lt;object>[]) => void, saveAsset: (url: string) => Promise&lt;string | null> }} utils - Utility functions.
+ */
+
+/**
+ * Creates the main Sanity Loader instance.
+ * @param {object} config - The configuration object.
+ * @returns {SanityLoader} The Sanity Loader instance.
+ */
+export function createSanityLoader(config) {
+  const settings = { ...defaultSanityLoaderOptions, ...config };
+
+  const { 
+    client: clientInstance, 
+    clientConfig, 
+    paths: pathConfig, 
+    verbose,
+    invalidateCachePerCall
+  } = settings;
+
+  const isCacheStaleFn = settings.isCacheStale || defaultSanityLoaderOptions.isCacheStale;
+
+  if ((!clientInstance &amp;&amp; !clientConfig) || !pathConfig) {
+    throw new Error("Configuration requires `paths` and either a `client` instance or a `clientConfig` object.");
+  }
+
+  const cacheDir = pathConfig.cache || path.join(process.cwd(), "node_modules", ".@ulu-cache-vite-virtual-modules-sanity-loader");
+
+  const client = clientInstance || createClient(clientConfig);
+  const imageUrlBuilder = createImageUrl(client);
+
+  let onStartStaleState = null; // null | boolean
+  let onStartCheckPromise = null;
+
+  async function getStaleState() {
+    if (invalidateCachePerCall) {
+      return Promise.resolve(isCacheStaleFn(client, { cacheDir }));
+    }
+
+    // "on-start" logic (default)
+    if (onStartStaleState !== null) {
+      return onStartStaleState;
+    }
+
+    if (onStartCheckPromise) {
+      return onStartCheckPromise;
+    }
+
+    onStartCheckPromise = Promise.resolve(isCacheStaleFn(client, { cacheDir })).then(isStale => {
+      onStartStaleState = isStale;
+      onStartCheckPromise = null;
+      return isStale;
+    });
+
+    return onStartCheckPromise;
+  }
+  
+  /**
+   * Executes a GROQ query against the Sanity API.
+   * @param {string} query - The GROQ query to execute.
+   * @returns {Promise&lt;any>} A promise that resolves with the query result.
+   */
+  async function fetch(query) {
+    if (!query) {
+      throw new Error("API: Incorrect query passed to fetch");
+    }
+    return client.fetch(query);
+  }
+
+  /**
+   * Reads a .groq query from the filesystem.
+   * @param {string} queryName - The name of the query file (without extension).
+   * @returns {string} The content of the query file.
+   */
+  function getQuery(queryName) {
+    if (!queryName) {
+      throw new Error("API: getQuery requires a queryName");
+    }
+    const filepath = path.join(pathConfig.queries, `${queryName}.groq`);
+    if (fs.existsSync(filepath)) {
+      return fs.readFileSync(filepath).toString();
+    } else {
+      throw new Error(`API: Unable to get query file ${queryName} at ${filepath}`);
+    }
+  }
+
+  /**
+   * Gets the full filesystem path for a cached query result.
+   * @param {string} queryName - The name of the query.
+   * @returns {string} The absolute path to the cache file.
+   */
+  function getCacheFilepath(queryName) {
+    return path.join(cacheDir, `${queryName}.json`);
+  }
+
+  /**
+   * Writes a query result to the cache.
+   * @param {any} result - The result from the Sanity fetch.
+   * @param {string} queryName - The name of the query to cache.
+   * @param {string} [expectedVersion] - The cache version.
+   */
+  function cacheResult(result, queryName, expectedVersion) {
+    const data = { result, version: expectedVersion };
+    const filepath = getCacheFilepath(queryName);
+    try {
+      fs.ensureDirSync(path.dirname(filepath));
+      fs.writeFileSync(filepath, JSON.stringify(data));
+    } catch (err) {
+      log.error(err);
+    }
+  }
+
+  /**
+   * Loads a query result from the cache if it exists and the version matches.
+   * @param {string} queryName - The name of the query to load.
+   * @param {string} [expectedVersion] - The expected cache version.
+   * @param {boolean} isStale - Whether the cache is considered stale.
+   * @returns {any|null} The cached result, or null if not found or version mismatch.
+   */
+  function loadFromCache(queryName, expectedVersion, isStale) {
+    const filepath = getCacheFilepath(queryName);
+    if (fs.existsSync(filepath)) {
+      // If content is stale, don't even bother reading the file.
+      if (isStale) return null;
+
+      const file = fs.readFileSync(filepath);
+      try {
+        const { result, version } = JSON.parse(file.toString());
+        // If using manual versioning, it's the only thing that matters.
+        if (expectedVersion) {
+          return version === expectedVersion ? result : null;
+        }
+        // If not stale and not manually versioned, we can trust the cache.
+        return result;
+      } catch (err) {
+        log.error(err);
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Downloads an asset from a URL, saves it locally, and returns the public path.
+   * @param {string} url - The URL of the asset to download.
+   * @returns {Promise&lt;string|null>} A promise that resolves with the public path of the saved asset.
+   */
+  async function saveAsset(url) {
+    if (!url) return null;
+
+    await fs.ensureDir(pathConfig.assets);
+
+    const imageName = path.basename(new URL(url).pathname);
+    const localPath = path.join(pathConfig.assets, imageName);
+    const publicPath = `${pathConfig.assetsPublic}/${imageName}`;
+
+    if (await fs.pathExists(localPath)) {
+      return publicPath;
+    }
+
+    return new Promise((resolve, reject) => {
+      const file = fs.createWriteStream(localPath);
+      https.get(url, (response) => {
+        response.pipe(file);
+        file.on("finish", () => {
+          file.close();
+          if (verbose) log.log(`Downloaded ${imageName}`);
+          resolve(publicPath);
+        });
+      }).on("error", (err) => {
+        fs.unlink(localPath, () => reject(err));
+        log.error(`Error downloading ${imageName}: ${err.message}`);
+        reject(err);
+      });
+    });
+  }
+
+  /**
+   * Defines a loader for a specific query, handling caching, fetching, and transformation.
+   * @param {object} options - The loader options.
+   * @returns {() => Promise&lt;any>} An async function that executes the loader and returns the transformed data.
+   */
+  function defineLoader(options) {
+    const loaderConfig = { ...loaderDefaults, ...options };
+    const { query, queryName, transform, cacheEnabled, expectedVersion } = loaderConfig;
+
+    return async function run() {
+      try {
+        if (cacheEnabled &amp;&amp; !queryName) {
+          throw new Error("defineLoader: `queryName` is required for caching.");
+        }
+
+        let isStale = true;
+        if (cacheEnabled) {
+          isStale = await getStaleState();
+          if (isStale &amp;&amp; verbose) {
+            log.log(`Cache is stale for query (${queryName})`);
+          }
+        }
+        
+        let result;
+        const cache = cacheEnabled ? loadFromCache(queryName, expectedVersion, isStale) : null;
+
+        if (cache) {
+          log.log(`Loaded query (${queryName}) data from cache`);
+          result = cache;
+        } else {
+          const queryString = query || (queryName ? getQuery(queryName) : null);
+          if (!queryString) {
+            throw new Error("defineLoader: `query` or `queryName` must be provided.");
+          }
+          log.log(`Fetching fresh data for query (${queryName})`);
+          result = await fetch(queryString);
+          if (cacheEnabled) {
+            cacheResult(result, queryName, expectedVersion);
+          }
+        }
+
+        return transform ? await transform(result) : result;
+
+      } catch (error) {
+        log.error(queryName, error.toString());
+        throw error;
+      }
+    };
+  }
+
+  return {
+    client,
+    defineLoader,
+    imageUrl: (source) => imageUrlBuilder.image(source),
+    utils: {
+      fixPortableText,
+      saveAsset
+    },
+    config: settings
+  };
+}
+</code></pre>
+        </article>
+    </section>
+
+
+
+
+    
+    
+</div>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc3/jsdoc">JSDoc 4.0.5</a> on Tue Dec 02 2025 18:49:25 GMT-0500 (Eastern Standard Time) using the <a href="https://github.com/clenemt/docdash">docdash</a> theme.
+</footer>
+
+<script>prettyPrint();</script>
+<script src="scripts/polyfill.js"></script>
+<script src="scripts/linenumber.js"></script>
+
+
+
+</body>
+</html>
