@@ -1,6 +1,6 @@
 {
   "name": "@ulu/sanity-loader",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "A generic loader for Sanity content. It handles data fetching, caching, and asset management.",
   "main": "lib/index.js",
   "types": "types/index.d.ts",
